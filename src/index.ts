@@ -11,6 +11,8 @@ import {
 // Global variables for viewer
 let viewer: Viewer | null = null;
 let filteringExtension: FilteringExtension | null = null;
+let isModelLoading = false;
+let pendingFilterGuid: string | null = null;
 
 // Initialize the Speckle Viewer
 async function initViewer(): Promise<void> {
@@ -72,6 +74,7 @@ async function loadModel(modelUrl: string): Promise<void> {
 
   try {
     console.log("Loading model:", modelUrl);
+    isModelLoading = true; // Set loading flag
     
     // Show loading indicator
     const loadingElement = document.getElementById("loading");
@@ -117,6 +120,14 @@ async function loadModel(modelUrl: string): Promise<void> {
     }
     
     console.log("Model loaded successfully!");
+    isModelLoading = false; // Clear loading flag
+    
+    // Apply any pending filter after model is loaded
+    if (pendingFilterGuid) {
+      console.log("Applying pending filter for GUID:", pendingFilterGuid);
+      filterByGuid(pendingFilterGuid);
+      pendingFilterGuid = null; // Clear pending filter
+    }
     
     // Send success message back to Qlik extension
     if (window.parent !== window) {
@@ -128,6 +139,8 @@ async function loadModel(modelUrl: string): Promise<void> {
     }
   } catch (error) {
     console.error("Failed to load model:", error);
+    isModelLoading = false; // Clear loading flag on error
+    pendingFilterGuid = null; // Clear pending filter on error
     
     // Hide loading indicator and show error
     const loadingElement = document.getElementById("loading");
@@ -388,7 +401,13 @@ window.addEventListener("message", (event) => {
   
   if (event.data && event.data.type === "SPECKLE_FILTER_BY_GUID" && event.data.guid) {
     console.log("Received filter request for GUID:", event.data.guid);
-    filterByGuid(event.data.guid);
+    
+    if (isModelLoading) {
+      console.log("Model is still loading, storing filter for later application:", event.data.guid);
+      pendingFilterGuid = event.data.guid;
+    } else {
+      filterByGuid(event.data.guid);
+    }
   }
   
   if (event.data && event.data.type === "SPECKLE_CLEAR_FILTER") {
