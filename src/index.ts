@@ -67,14 +67,26 @@ async function initViewer(): Promise<void> {
 async function loadModel(modelUrl: string): Promise<void> {
   if (!viewer) {
     console.error("Viewer not initialized");
+    alert("Viewer not initialized. Please refresh the page and try again.");
     return;
   }
 
   try {
     console.log("Loading model:", modelUrl);
     
+    // Show loading indicator
+    const loadingElement = document.getElementById("loading");
+    if (loadingElement) {
+      loadingElement.style.display = "block";
+      loadingElement.textContent = "Loading model...";
+    }
+    
     const urls = await UrlHelper.getResourceUrls(modelUrl);
     console.log("Found", urls.length, "resource URLs");
+    
+    if (urls.length === 0) {
+      throw new Error("No resource URLs found for this model");
+    }
     
     // Clear existing models first (if any)
     try {
@@ -94,15 +106,31 @@ async function loadModel(modelUrl: string): Promise<void> {
     }
     
     for (const url of urls) {
+      console.log("Loading resource:", url);
       const loader = new SpeckleLoader(viewer.getWorldTree(), url, "");
       await viewer.loadObject(loader, true);
+      console.log("Resource loaded successfully");
+    }
+    
+    // Hide loading indicator
+    if (loadingElement) {
+      loadingElement.style.display = "none";
     }
     
     currentModelUrl = modelUrl;
     console.log("Model loaded successfully!");
   } catch (error) {
     console.error("Failed to load model:", error);
-    alert("Failed to load model. Please check the URL and try again.");
+    
+    // Hide loading indicator and show error
+    const loadingElement = document.getElementById("loading");
+    if (loadingElement) {
+      loadingElement.style.display = "block";
+      loadingElement.textContent = "Failed to load model. Check console for details.";
+      loadingElement.style.color = "#e74c3c";
+    }
+    
+    alert(`Failed to load model: ${error.message || error}. Please check the URL and try again.`);
   }
 }
 
