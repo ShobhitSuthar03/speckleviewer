@@ -29,43 +29,11 @@
             z-index: 1000;
         }
         
-        #controls {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
-        }
-        
-        button {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            margin: 5px;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        
-        button:hover {
-            background: #2980b9;
-        }
     </style>
 </head>
 <body>
     <div id="loading">Loading Speckle Viewer...</div>
     <div id="speckle"></div>
-    <div id="controls">
-        <div style="margin-bottom: 10px;">
-            <input type="text" id="modelUrl" placeholder="Enter Speckle model URL" 
-                   style="width: 300px; padding: 5px; margin-right: 10px; border: 1px solid #ccc; border-radius: 3px;">
-            <button onclick="loadCustomModel()">Load Model</button>
-        </div>
-        <button onclick="resetCamera()">Reset Camera</button>
-        <button onclick="toggleStats()">Toggle Stats</button>
-    </div>
     <script type="module" src="/src/index.ts"></script>
 </body>
 </html>

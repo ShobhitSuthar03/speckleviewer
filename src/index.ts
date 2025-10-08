@@ -7,9 +7,8 @@ import {
   SelectionExtension
 } from "@speckle/viewer";
 
-// Global variables for viewer and controls
+// Global variables for viewer
 let viewer: Viewer | null = null;
-let showStats = true;
 let currentModelUrl: string | null = null;
 
 // Initialize the Speckle Viewer
@@ -25,7 +24,7 @@ async function initViewer(): Promise<void> {
 
     // Configure the viewer parameters
     const params = { ...DefaultViewerParams };
-    params.showStats = showStats;
+    params.showStats = false; // Disable stats by default
     params.verbose = true;
 
     // Create and initialize the viewer
@@ -44,11 +43,6 @@ async function initViewer(): Promise<void> {
     // Check for model URL in query parameters
     const queryModelUrl = getModelUrlFromQuery();
     if (queryModelUrl) {
-      // Pre-fill the input and load the model
-      const urlInput = document.getElementById("modelUrl") as HTMLInputElement;
-      if (urlInput) {
-        urlInput.value = queryModelUrl;
-      }
       await loadModel(queryModelUrl);
     }
 
@@ -140,52 +134,10 @@ function getModelUrlFromQuery(): string | null {
   return urlParams.get('model') || urlParams.get('url');
 }
 
-// Load custom model from user input
-function loadCustomModel(): void {
-  const urlInput = document.getElementById("modelUrl") as HTMLInputElement;
-  const modelUrl = urlInput.value.trim();
-  
-  if (!modelUrl) {
-    alert("Please enter a model URL");
-    return;
-  }
-  
-  if (!isValidSpeckleUrl(modelUrl)) {
-    alert("Please enter a valid Speckle model URL");
-    return;
-  }
-  
-  loadModel(modelUrl);
-}
-
 // Validate Speckle URL
 function isValidSpeckleUrl(url: string): boolean {
   // Basic validation for Speckle URLs
   return url.includes('speckle.') && (url.includes('/models/') || url.includes('/streams/'));
-}
-
-// Global functions for HTML controls
-function resetCamera(): void {
-  if (viewer) {
-    // Get the CameraController extension and call its default() method
-    const cameraController = viewer.getExtension(CameraController);
-    if (cameraController) {
-      cameraController.default();
-      console.log("Camera reset");
-    }
-  }
-}
-
-function toggleStats(): void {
-  if (viewer) {
-    showStats = !showStats;
-    // Access the stats through the viewer's internal stats property
-    const stats = (viewer as any).stats;
-    if (stats) {
-      stats.domElement.style.display = showStats ? "block" : "none";
-    }
-    console.log("Stats visibility:", showStats ? "on" : "off");
-  }
 }
 
 // Initialize the viewer when the page loads
@@ -194,7 +146,3 @@ document.addEventListener("DOMContentLoaded", () => {
   initViewer();
 });
 
-// Make functions globally available for HTML buttons
-(window as any).loadCustomModel = loadCustomModel;
-(window as any).resetCamera = resetCamera;
-(window as any).toggleStats = toggleStats;
