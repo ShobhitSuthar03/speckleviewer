@@ -37,8 +37,11 @@ async function initViewer(): Promise<void> {
 
     // Add extensions
     viewer.createExtension(CameraController);
-    viewer.createExtension(SelectionExtension);
+    const selectionExtension = viewer.createExtension(SelectionExtension);
     filteringExtension = viewer.createExtension(FilteringExtension);
+
+    // Set up selection event listener for reverse filtering
+    setupSelectionListener(selectionExtension);
 
     // Hide loading indicator
     if (loadingElement) {
@@ -384,6 +387,95 @@ function clearFilter(): void {
         error: `Clear filter failed: ${(error as Error).message || String(error)}`
       }, "*");
     }
+  }
+}
+
+// Set up selection listener for reverse filtering (3D → Qlik)
+function setupSelectionListener(selectionExtension: any): void {
+  if (!selectionExtension) {
+    console.error("SelectionExtension not available");
+    return;
+  }
+
+  console.log("Setting up selection listener for reverse filtering");
+
+  // Listen for selection events
+  selectionExtension.on("selection", (selection: any) => {
+    console.log("Object selected in 3D viewer:", selection);
+    
+    if (selection && selection.length > 0) {
+      // Get the first selected object
+      const selectedObject = selection[0];
+      console.log("Selected object details:", selectedObject);
+      
+      // Extract IFC GUID from the selected object
+      const guid = extractGuidFromObject(selectedObject);
+      
+      if (guid) {
+        console.log("Extracted GUID from selected object:", guid);
+        
+        // Send selection message to Qlik extension
+        if (window.parent !== window) {
+          window.parent.postMessage({
+            type: "SPECKLE_OBJECT_SELECTED",
+            source: "speckle-viewer",
+            guid: guid,
+            objectName: selectedObject.name || "Unknown",
+            objectId: selectedObject.id
+          }, "*");
+        }
+      } else {
+        console.log("No GUID found in selected object");
+      }
+    }
+  });
+
+  // Listen for deselection events
+  selectionExtension.on("deselection", (deselection: any) => {
+    console.log("Object deselected in 3D viewer:", deselection);
+    
+    // Send deselection message to Qlik extension
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: "SPECKLE_OBJECT_DESELECTED",
+        source: "speckle-viewer"
+      }, "*");
+    }
+  });
+}
+
+// Extract IFC GUID from a selected object
+function extractGuidFromObject(object: any): string | null {
+  try {
+    // Try to get GUID from object properties
+    if (object && object.model && object.model.raw) {
+      const raw = object.model.raw;
+      
+      // Check for IFC GlobalId
+      if (raw.GlobalId) {
+        return raw.GlobalId;
+      }
+      
+      // Check for other GUID-like properties
+      if (raw.id && typeof raw.id === 'string' && raw.id.length > 10) {
+        return raw.id;
+      }
+      
+      // Check for name-based identification
+      if (raw.Name && typeof raw.Name === 'string') {
+        return raw.Name;
+      }
+    }
+    
+    // Try to get GUID from object itself
+    if (object && object.id) {
+      return object.id;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error extracting GUID from object:", error);
+    return null;
   }
 }
 
