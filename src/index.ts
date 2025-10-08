@@ -402,6 +402,9 @@ function setupSelectionListener(selectionExtension: any): void {
 
   console.log("Setting up selection listener for reverse filtering");
   console.log("SelectionExtension object:", selectionExtension);
+  console.log("SelectionExtension prototype:", Object.getPrototypeOf(selectionExtension));
+  console.log("SelectionExtension methods:", Object.getOwnPropertyNames(selectionExtension));
+  console.log("SelectionExtension constructor:", selectionExtension.constructor.name);
 
   // Try multiple event approaches
   const eventNames = [
@@ -447,13 +450,37 @@ function setupSelectionListener(selectionExtension: any): void {
           // Try different ways to get current selection
           let currentSelection = null;
           
+          // Method 1: Direct property access
           if (selectionExtension.selection) {
             currentSelection = selectionExtension.selection;
-          } else if (typeof selectionExtension.getSelection === 'function') {
+          }
+          
+          // Method 2: Method calls
+          if (!currentSelection && typeof selectionExtension.getSelection === 'function') {
             currentSelection = selectionExtension.getSelection();
-          } else {
-            // Viewer.getSelection() is not available in the type definition
-            // Skip trying to access it to avoid TypeScript errors
+          }
+          
+          // Method 3: Try other common selection properties
+          if (!currentSelection) {
+            const possibleProps = ['selectedObjects', 'currentSelection', 'selected', 'activeSelection'];
+            for (const prop of possibleProps) {
+              if (selectionExtension[prop]) {
+                currentSelection = selectionExtension[prop];
+                break;
+              }
+            }
+          }
+          
+          // Method 4: Try to access viewer's internal selection state
+          if (!currentSelection && viewer) {
+            const viewerAny = viewer as any;
+            const possibleViewerProps = ['selection', 'selectedObjects', 'currentSelection', 'selected'];
+            for (const prop of possibleViewerProps) {
+              if (viewerAny[prop]) {
+                currentSelection = viewerAny[prop];
+                break;
+              }
+            }
           }
           
           if (currentSelection && JSON.stringify(currentSelection) !== JSON.stringify(lastSelection)) {
@@ -465,7 +492,7 @@ function setupSelectionListener(selectionExtension: any): void {
       } catch (error) {
         // Silently handle polling errors
       }
-    }, 1000); // Poll every second
+    }, 500); // Poll every 500ms for more responsive detection
   }
 }
 
@@ -487,12 +514,39 @@ function setupDirectClickDetection(container: HTMLElement): void {
     // Try to get the object at the click position
     if (viewer) {
       try {
-        // Use the viewer's raycasting to find objects at click position
-        const objects = (viewer as any).getObjectsAt?.(x, y);
-        console.log("Objects at click position:", objects);
+        console.log("Attempting to find objects at click position...");
         
-        if (objects && objects.length > 0) {
-          const clickedObject = objects[0];
+        // Method 1: Try getObjectsAt with different parameter formats
+        let objects = null;
+        
+        // Try different parameter formats
+        const methods = [
+          () => (viewer as any).getObjectsAt?.(x, y),
+          () => (viewer as any).getObjectsAt?.(event.clientX, event.clientY),
+          () => (viewer as any).getObjectsAt?.({ x, y }),
+          () => (viewer as any).getObjectsAt?.({ clientX: event.clientX, clientY: event.clientY }),
+          () => (viewer as any).pickObject?.(x, y),
+          () => (viewer as any).pickObject?.(event.clientX, event.clientY),
+          () => (viewer as any).raycast?.(x, y),
+          () => (viewer as any).raycast?.(event.clientX, event.clientY)
+        ];
+        
+        for (let i = 0; i < methods.length; i++) {
+          try {
+            objects = methods[i]();
+            if (objects !== undefined && objects !== null) {
+              console.log(`Method ${i + 1} returned objects:`, objects);
+              break;
+            }
+          } catch (methodError) {
+            console.log(`Method ${i + 1} failed:`, (methodError as Error).message);
+          }
+        }
+        
+        console.log("Final objects result:", objects);
+        
+        if (objects && (Array.isArray(objects) ? objects.length > 0 : objects)) {
+          const clickedObject = Array.isArray(objects) ? objects[0] : objects;
           console.log("Clicked object:", clickedObject);
           
           // Extract GUID from the clicked object
@@ -515,26 +569,58 @@ function setupDirectClickDetection(container: HTMLElement): void {
             console.log("No GUID found in clicked object");
           }
         } else {
-          console.log("No objects found at click position");
+          console.log("No objects found at click position, trying alternative approaches...");
+          
+          // Method 2: Try to access the selection extension directly
+          try {
+            const extensions = (viewer as any).getExtensions?.();
+            console.log("Available extensions:", extensions);
+            
+            if (extensions) {
+              const selectionExt = extensions.find((ext: any) => 
+                ext.constructor.name === 'SelectionExtension' || 
+                ext.constructor.name.includes('Selection')
+              );
+              
+              if (selectionExt) {
+                console.log("Found selection extension:", selectionExt);
+                console.log("Selection extension methods:", Object.getOwnPropertyNames(selectionExt));
+                
+                // Try different ways to get current selection
+                const selectionMethods = [
+                  () => selectionExt.selection,
+                  () => selectionExt.getSelection?.(),
+                  () => selectionExt.getSelectedObjects?.(),
+                  () => selectionExt.selectedObjects,
+                  () => selectionExt.currentSelection
+                ];
+                
+                for (let i = 0; i < selectionMethods.length; i++) {
+                  try {
+                    const currentSelection = selectionMethods[i]();
+                    if (currentSelection) {
+                      console.log(`Selection method ${i + 1} returned:`, currentSelection);
+                      handleSelectionEvent(currentSelection, "click-fallback");
+                      break;
+                    }
+                  } catch (selectionError: unknown) {
+                    if (selectionError instanceof Error) {
+                      console.log(`Selection method ${i + 1} failed:`, (selectionError as Error).message);
+                    } else {
+                      console.log(`Selection method ${i + 1} failed with unknown error`);
+                    }
+                  }
+                }
+              } else {
+                console.log("No selection extension found");
+              }
+            }
+          } catch (fallbackError) {
+            console.error("Fallback selection access failed:", fallbackError);
+          }
         }
       } catch (error) {
-        console.error("Error getting objects at click position:", error);
-        
-        // Fallback: try to access the selection extension directly
-        try {
-          const extensions = (viewer as any).getExtensions?.();
-          const selectionExt = extensions.find((ext: any) => ext.constructor.name === 'SelectionExtension');
-          if (selectionExt) {
-            console.log("Trying to access selection extension directly");
-            const currentSelection = selectionExt.selection || selectionExt.getSelection?.();
-            if (currentSelection) {
-              console.log("Current selection from extension:", currentSelection);
-              handleSelectionEvent(currentSelection, "click-fallback");
-            }
-          }
-        } catch (fallbackError) {
-          console.error("Fallback selection access failed:", fallbackError);
-        }
+        console.error("Error in click detection:", error);
       }
     }
   });
