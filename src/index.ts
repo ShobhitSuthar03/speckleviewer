@@ -44,8 +44,8 @@ async function initViewer(): Promise<void> {
     if (queryModelUrl) {
       await loadModel(queryModelUrl);
     } else {
-      // Show "Please Select Project" message when no URL is provided
-      showSelectProjectPrompt();
+      // Show URL input form when no URL is provided
+      showUrlInputForm();
     }
 
     console.log("Speckle Viewer initialized successfully!");
@@ -64,12 +64,6 @@ async function loadModel(modelUrl: string): Promise<void> {
   if (!viewer) {
     console.error("Viewer not initialized");
     alert("Viewer not initialized. Please refresh the page and try again.");
-    return;
-  }
-
-  if (!modelUrl || modelUrl.trim() === '') {
-    console.log("No model URL provided - showing select project prompt");
-    showSelectProjectPrompt();
     return;
   }
 
@@ -120,8 +114,6 @@ async function loadModel(modelUrl: string): Promise<void> {
     }
     
     console.log("Model loaded successfully!");
-    // Clear any existing select project prompt
-    clearSelectProjectPrompt();
   } catch (error) {
     console.error("Failed to load model:", error);
     
@@ -143,62 +135,93 @@ function getModelUrlFromQuery(): string | null {
   return urlParams.get('model') || urlParams.get('url');
 }
 
-// Show "Please Select Project" prompt when no URL is available
-function showSelectProjectPrompt(): void {
-  const container = document.getElementById("speckle");
-  if (!container) return;
-
-  container.innerHTML = `
-    <div style="
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: #ffffff;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background: linear-gradient(135deg, #2c3e50, #34495e);
-    ">
-      <div style="
-        background: rgba(0, 0, 0, 0.7);
-        padding: 40px;
-        border-radius: 10px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        max-width: 400px;
-        margin: 20px;
-      ">
-        <div style="
-          font-size: 48px;
-          margin-bottom: 20px;
-          opacity: 0.8;
-        ">📊</div>
-        <h2 style="
-          margin: 0 0 15px 0;
-          font-size: 24px;
-          font-weight: 300;
-          color: #ecf0f1;
-        ">Please Select Project</h2>
-        <p style="
-          margin: 0;
-          font-size: 16px;
-          color: #bdc3c7;
-          line-height: 1.5;
-        ">Select a project in Qlik to view the 3D model here</p>
-      </div>
-    </div>
-  `;
-}
-
-// Clear the select project prompt (called when model loads successfully)
-function clearSelectProjectPrompt(): void {
-  const container = document.getElementById("speckle");
-  if (!container) return;
+// Validate Speckle URL
+function isValidSpeckleUrl(url: string): boolean {
+  if (!url || url.trim() === '') return false;
   
-  // Reset container to empty state for the viewer
-  container.innerHTML = '';
+  // Basic validation for Speckle URLs
+  return url.includes('speckle.') && (url.includes('/models/') || url.includes('/streams/'));
 }
 
+// Show URL input form
+function showUrlInputForm(): void {
+  const urlInputContainer = document.getElementById('url-input-container');
+  const urlInput = document.getElementById('url-input') as HTMLInputElement;
+  
+  if (urlInputContainer) {
+    urlInputContainer.style.display = 'block';
+  }
+  
+  // Add Enter key support
+  if (urlInput) {
+    urlInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        loadModelFromInput();
+      }
+    });
+  }
+}
+
+// Hide URL input form
+function hideUrlInputForm(): void {
+  const urlInputContainer = document.getElementById('url-input-container');
+  if (urlInputContainer) {
+    urlInputContainer.style.display = 'none';
+  }
+}
+
+// Show error message
+function showErrorMessage(message: string): void {
+  const errorElement = document.getElementById('error-message');
+  if (errorElement) {
+    errorElement.textContent = message;
+    errorElement.style.display = 'block';
+  }
+}
+
+// Hide error message
+function hideErrorMessage(): void {
+  const errorElement = document.getElementById('error-message');
+  if (errorElement) {
+    errorElement.style.display = 'none';
+  }
+}
+
+// Load model from URL input (called from HTML button)
+async function loadModelFromInput(): Promise<void> {
+  const urlInput = document.getElementById('url-input') as HTMLInputElement;
+  const loadButton = document.getElementById('load-button') as HTMLButtonElement;
+  
+  if (!urlInput || !loadButton) return;
+  
+  const modelUrl = urlInput.value.trim();
+  
+  // Validate URL
+  if (!isValidSpeckleUrl(modelUrl)) {
+    showErrorMessage('Please enter a valid Speckle model URL (e.g., https://app.speckle.systems/projects/.../models/...)');
+    return;
+  }
+  
+  // Disable button and show loading
+  loadButton.disabled = true;
+  loadButton.textContent = 'Loading...';
+  hideErrorMessage();
+  
+  try {
+    await loadModel(modelUrl);
+    hideUrlInputForm();
+  } catch (error) {
+    showErrorMessage(`Failed to load model: ${(error as Error).message || String(error)}`);
+  } finally {
+    // Re-enable button
+    loadButton.disabled = false;
+    loadButton.textContent = 'Load Model';
+  }
+}
+
+
+// Make loadModelFromInput globally accessible
+(window as any).loadModelFromInput = loadModelFromInput;
 
 // Initialize the viewer when the page loads
 document.addEventListener("DOMContentLoaded", () => {
