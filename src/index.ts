@@ -10,6 +10,7 @@ import {
 // Global variables for viewer and controls
 let viewer: Viewer | null = null;
 let showStats = true;
+let currentModelUrl: string | null = null;
 
 // Initialize the Speckle Viewer
 async function initViewer(): Promise<void> {
@@ -40,8 +41,16 @@ async function initViewer(): Promise<void> {
       loadingElement.style.display = "none";
     }
 
-    // Load a sample Speckle model
-    await loadSampleModel();
+    // Check for model URL in query parameters
+    const queryModelUrl = getModelUrlFromQuery();
+    if (queryModelUrl) {
+      // Pre-fill the input and load the model
+      const urlInput = document.getElementById("modelUrl") as HTMLInputElement;
+      if (urlInput) {
+        urlInput.value = queryModelUrl;
+      }
+      await loadModel(queryModelUrl);
+    }
 
     console.log("Speckle Viewer initialized successfully!");
   } catch (error) {
@@ -54,31 +63,63 @@ async function initViewer(): Promise<void> {
   }
 }
 
-// Load a sample Speckle model
-async function loadSampleModel(): Promise<void> {
+// Load a Speckle model by URL
+async function loadModel(modelUrl: string): Promise<void> {
   if (!viewer) {
     console.error("Viewer not initialized");
     return;
   }
 
   try {
-    // Sample Speckle model URL (you can replace this with your own model)
-    const modelUrl = "https://app.speckle.systems/projects/d3d0ac8029/models/f8b8cbeeca";
-    
     console.log("Loading model:", modelUrl);
     
     const urls = await UrlHelper.getResourceUrls(modelUrl);
     console.log("Found", urls.length, "resource URLs");
+    
+    // Clear existing models first
+    viewer.getWorldTree().clear();
     
     for (const url of urls) {
       const loader = new SpeckleLoader(viewer.getWorldTree(), url, "");
       await viewer.loadObject(loader, true);
     }
     
+    currentModelUrl = modelUrl;
     console.log("Model loaded successfully!");
   } catch (error) {
     console.error("Failed to load model:", error);
+    alert("Failed to load model. Please check the URL and try again.");
   }
+}
+
+// Get model URL from query parameters
+function getModelUrlFromQuery(): string | null {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('model') || urlParams.get('url');
+}
+
+// Load custom model from user input
+function loadCustomModel(): void {
+  const urlInput = document.getElementById("modelUrl") as HTMLInputElement;
+  const modelUrl = urlInput.value.trim();
+  
+  if (!modelUrl) {
+    alert("Please enter a model URL");
+    return;
+  }
+  
+  if (!isValidSpeckleUrl(modelUrl)) {
+    alert("Please enter a valid Speckle model URL");
+    return;
+  }
+  
+  loadModel(modelUrl);
+}
+
+// Validate Speckle URL
+function isValidSpeckleUrl(url: string): boolean {
+  // Basic validation for Speckle URLs
+  return url.includes('speckle.') && (url.includes('/models/') || url.includes('/streams/'));
 }
 
 // Global functions for HTML controls
@@ -112,5 +153,6 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // Make functions globally available for HTML buttons
+(window as any).loadCustomModel = loadCustomModel;
 (window as any).resetCamera = resetCamera;
 (window as any).toggleStats = toggleStats;

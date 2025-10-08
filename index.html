@@ -58,6 +58,11 @@
     <div id="loading">Loading Speckle Viewer...</div>
     <div id="speckle"></div>
     <div id="controls">
+        <div style="margin-bottom: 10px;">
+            <input type="text" id="modelUrl" placeholder="Enter Speckle model URL" 
+                   style="width: 300px; padding: 5px; margin-right: 10px; border: 1px solid #ccc; border-radius: 3px;">
+            <button onclick="loadCustomModel()">Load Model</button>
+        </div>
         <button onclick="resetCamera()">Reset Camera</button>
         <button onclick="toggleStats()">Toggle Stats</button>
     </div>
