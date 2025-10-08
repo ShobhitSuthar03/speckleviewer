@@ -7,7 +7,6 @@ A basic implementation of the Speckle Viewer for 3D model visualization.
 - 3D model viewing with Speckle Viewer
 - Camera controls (orbit, zoom, pan)
 - Object selection
-- Statistics display toggle
 - Responsive design
 
 ## Setup Instructions
@@ -60,8 +59,6 @@ const modelUrl = "YOUR_SPECKLE_MODEL_URL_HERE";
 - **Mouse**: Orbit around the model
 - **Scroll**: Zoom in/out
 - **Right-click + drag**: Pan the view
-- **Reset Camera**: Button to reset to default view
-- **Toggle Stats**: Button to show/hide performance statistics
 
 ## Requirements
 

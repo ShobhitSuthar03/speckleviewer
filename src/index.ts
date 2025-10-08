@@ -9,7 +9,6 @@ import {
 
 // Global variables for viewer
 let viewer: Viewer | null = null;
-let currentModelUrl: string | null = null;
 
 // Initialize the Speckle Viewer
 async function initViewer(): Promise<void> {
@@ -44,6 +43,9 @@ async function initViewer(): Promise<void> {
     const queryModelUrl = getModelUrlFromQuery();
     if (queryModelUrl) {
       await loadModel(queryModelUrl);
+    } else {
+      // Show "Please Select Project" message when no URL is provided
+      showSelectProjectPrompt();
     }
 
     console.log("Speckle Viewer initialized successfully!");
@@ -62,6 +64,12 @@ async function loadModel(modelUrl: string): Promise<void> {
   if (!viewer) {
     console.error("Viewer not initialized");
     alert("Viewer not initialized. Please refresh the page and try again.");
+    return;
+  }
+
+  if (!modelUrl || modelUrl.trim() === '') {
+    console.log("No model URL provided - showing select project prompt");
+    showSelectProjectPrompt();
     return;
   }
 
@@ -111,8 +119,9 @@ async function loadModel(modelUrl: string): Promise<void> {
       loadingElement.style.display = "none";
     }
     
-    currentModelUrl = modelUrl;
     console.log("Model loaded successfully!");
+    // Clear any existing select project prompt
+    clearSelectProjectPrompt();
   } catch (error) {
     console.error("Failed to load model:", error);
     
@@ -134,11 +143,62 @@ function getModelUrlFromQuery(): string | null {
   return urlParams.get('model') || urlParams.get('url');
 }
 
-// Validate Speckle URL
-function isValidSpeckleUrl(url: string): boolean {
-  // Basic validation for Speckle URLs
-  return url.includes('speckle.') && (url.includes('/models/') || url.includes('/streams/'));
+// Show "Please Select Project" prompt when no URL is available
+function showSelectProjectPrompt(): void {
+  const container = document.getElementById("speckle");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div style="
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+    ">
+      <div style="
+        background: rgba(0, 0, 0, 0.7);
+        padding: 40px;
+        border-radius: 10px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        max-width: 400px;
+        margin: 20px;
+      ">
+        <div style="
+          font-size: 48px;
+          margin-bottom: 20px;
+          opacity: 0.8;
+        ">📊</div>
+        <h2 style="
+          margin: 0 0 15px 0;
+          font-size: 24px;
+          font-weight: 300;
+          color: #ecf0f1;
+        ">Please Select Project</h2>
+        <p style="
+          margin: 0;
+          font-size: 16px;
+          color: #bdc3c7;
+          line-height: 1.5;
+        ">Select a project in Qlik to view the 3D model here</p>
+      </div>
+    </div>
+  `;
 }
+
+// Clear the select project prompt (called when model loads successfully)
+function clearSelectProjectPrompt(): void {
+  const container = document.getElementById("speckle");
+  if (!container) return;
+  
+  // Reset container to empty state for the viewer
+  container.innerHTML = '';
+}
+
 
 // Initialize the viewer when the page loads
 document.addEventListener("DOMContentLoaded", () => {
