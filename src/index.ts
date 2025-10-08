@@ -76,8 +76,22 @@ async function loadModel(modelUrl: string): Promise<void> {
     const urls = await UrlHelper.getResourceUrls(modelUrl);
     console.log("Found", urls.length, "resource URLs");
     
-    // Clear existing models first
-    viewer.getWorldTree().clear();
+    // Clear existing models first (if any)
+    try {
+      const worldTree = viewer.getWorldTree();
+      if (worldTree && worldTree.root && worldTree.root.children.length > 0) {
+        // Remove all existing children
+        const children = [...worldTree.root.children];
+        children.forEach(child => {
+          if (worldTree.removeNode) {
+            worldTree.removeNode(child);
+          }
+        });
+      }
+    } catch (clearError) {
+      console.warn("Could not clear existing models:", clearError);
+      // Continue with loading new model
+    }
     
     for (const url of urls) {
       const loader = new SpeckleLoader(viewer.getWorldTree(), url, "");
