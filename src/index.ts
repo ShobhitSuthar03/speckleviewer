@@ -13,6 +13,7 @@ let viewer: Viewer | null = null;
 let filteringExtension: FilteringExtension | null = null;
 let isModelLoading = false;
 let pendingFilterGuid: string | null = null;
+let currentModelUrl: string | null = null;
 
 // Initialize the Speckle Viewer
 async function initViewer(): Promise<void> {
@@ -75,6 +76,7 @@ async function loadModel(modelUrl: string): Promise<void> {
   try {
     console.log("Loading model:", modelUrl);
     isModelLoading = true; // Set loading flag
+    currentModelUrl = modelUrl; // Store current model URL
     
     // Show loading indicator
     const loadingElement = document.getElementById("loading");
@@ -396,7 +398,14 @@ window.addEventListener("message", (event) => {
   
   if (event.data && event.data.type === "SPECKLE_URL_UPDATE" && event.data.modelUrl) {
     console.log("Received URL update from Qlik extension:", event.data.modelUrl);
-    loadModel(event.data.modelUrl);
+    
+    // Only reload if the URL is different from the current model
+    if (currentModelUrl !== event.data.modelUrl) {
+      console.log("URL changed, reloading model");
+      loadModel(event.data.modelUrl);
+    } else {
+      console.log("URL is the same as current model, skipping reload");
+    }
   }
   
   if (event.data && event.data.type === "SPECKLE_FILTER_BY_GUID" && event.data.guid) {
