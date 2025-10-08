@@ -42,6 +42,9 @@ async function initViewer(): Promise<void> {
 
     // Set up selection event listener for reverse filtering
     setupSelectionListener(selectionExtension);
+    
+    // Also set up direct click detection on the viewer container
+    setupDirectClickDetection(container);
 
     // Hide loading indicator
     if (loadingElement) {
@@ -464,6 +467,79 @@ function setupSelectionListener(selectionExtension: any): void {
       }
     }, 1000); // Poll every second
   }
+}
+
+// Set up direct click detection on the viewer container
+function setupDirectClickDetection(container: HTMLElement): void {
+  console.log("Setting up direct click detection on viewer container");
+  
+  // Add click event listener to the container
+  container.addEventListener('click', (event: MouseEvent) => {
+    console.log("Click detected on viewer container:", event);
+    
+    // Get the click coordinates
+    const rect = container.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    console.log(`Click coordinates: (${x}, ${y})`);
+    
+    // Try to get the object at the click position
+    if (viewer) {
+      try {
+        // Use the viewer's raycasting to find objects at click position
+        const objects = (viewer as any).getObjectsAt?.(x, y);
+        console.log("Objects at click position:", objects);
+        
+        if (objects && objects.length > 0) {
+          const clickedObject = objects[0];
+          console.log("Clicked object:", clickedObject);
+          
+          // Extract GUID from the clicked object
+          const guid = extractGuidFromObject(clickedObject);
+          
+          if (guid) {
+            console.log("Extracted GUID from clicked object:", guid);
+            
+            // Send selection message to Qlik extension
+            if (window.parent !== window) {
+              window.parent.postMessage({
+                type: "SPECKLE_OBJECT_SELECTED",
+                source: "speckle-viewer",
+                guid: guid,
+                objectName: clickedObject.name || clickedObject.Name || "Unknown",
+                objectId: clickedObject.id
+              }, "*");
+            }
+          } else {
+            console.log("No GUID found in clicked object");
+          }
+        } else {
+          console.log("No objects found at click position");
+        }
+      } catch (error) {
+        console.error("Error getting objects at click position:", error);
+        
+        // Fallback: try to access the selection extension directly
+        try {
+          const extensions = (viewer as any).getExtensions?.();
+          const selectionExt = extensions.find((ext: any) => ext.constructor.name === 'SelectionExtension');
+          if (selectionExt) {
+            console.log("Trying to access selection extension directly");
+            const currentSelection = selectionExt.selection || selectionExt.getSelection?.();
+            if (currentSelection) {
+              console.log("Current selection from extension:", currentSelection);
+              handleSelectionEvent(currentSelection, "click-fallback");
+            }
+          }
+        } catch (fallbackError) {
+          console.error("Fallback selection access failed:", fallbackError);
+        }
+      }
+    }
+  });
+  
+  console.log("Direct click detection setup complete");
 }
 
 // Handle selection events from different sources
