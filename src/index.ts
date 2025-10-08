@@ -398,50 +398,118 @@ function setupSelectionListener(selectionExtension: any): void {
   }
 
   console.log("Setting up selection listener for reverse filtering");
+  console.log("SelectionExtension object:", selectionExtension);
 
-  // Listen for selection events
-  selectionExtension.on("selection", (selection: any) => {
-    console.log("Object selected in 3D viewer:", selection);
+  // Try multiple event approaches
+  const eventNames = [
+    "selection",
+    "select", 
+    "objectSelected",
+    "onSelection",
+    "onSelect",
+    "change",
+    "update"
+  ];
+
+  // Method 1: Try different event names
+  eventNames.forEach(eventName => {
+    try {
+      selectionExtension.on(eventName, (data: any) => {
+        console.log(`Selection event '${eventName}' triggered:`, data);
+        handleSelectionEvent(data, eventName);
+      });
+      console.log(`Registered listener for event: ${eventName}`);
+    } catch (error) {
+      console.log(`Failed to register listener for event: ${eventName}`, error);
+    }
+  });
+
+  // Method 2: Try direct property access
+  if (selectionExtension.selection) {
+    console.log("SelectionExtension has selection property:", selectionExtension.selection);
+  }
+
+  // Method 3: Try to access the viewer's selection directly
+  if (viewer) {
+    console.log("Trying to access viewer selection directly");
     
-    if (selection && selection.length > 0) {
-      // Get the first selected object
-      const selectedObject = selection[0];
-      console.log("Selected object details:", selectedObject);
-      
-      // Extract IFC GUID from the selected object
-      const guid = extractGuidFromObject(selectedObject);
-      
-      if (guid) {
-        console.log("Extracted GUID from selected object:", guid);
-        
-        // Send selection message to Qlik extension
-        if (window.parent !== window) {
-          window.parent.postMessage({
-            type: "SPECKLE_OBJECT_SELECTED",
-            source: "speckle-viewer",
-            guid: guid,
-            objectName: selectedObject.name || "Unknown",
-            objectId: selectedObject.id
-          }, "*");
+    // Check if viewer has selection methods
+    console.log("Checking viewer selection capabilities");
+    
+    // Try to set up a polling mechanism as fallback
+    let lastSelection: any = null;
+    setInterval(() => {
+      try {
+        if (viewer && selectionExtension) {
+          // Try different ways to get current selection
+          let currentSelection = null;
+          
+          if (selectionExtension.selection) {
+            currentSelection = selectionExtension.selection;
+          } else if (typeof selectionExtension.getSelection === 'function') {
+            currentSelection = selectionExtension.getSelection();
+          } else {
+            // Viewer.getSelection() is not available in the type definition
+            // Skip trying to access it to avoid TypeScript errors
+          }
+          
+          if (currentSelection && JSON.stringify(currentSelection) !== JSON.stringify(lastSelection)) {
+            console.log("Selection changed via polling:", currentSelection);
+            handleSelectionEvent(currentSelection, "polling");
+            lastSelection = currentSelection;
+          }
         }
-      } else {
-        console.log("No GUID found in selected object");
+      } catch (error) {
+        // Silently handle polling errors
       }
-    }
-  });
+    }, 1000); // Poll every second
+  }
+}
 
-  // Listen for deselection events
-  selectionExtension.on("deselection", (deselection: any) => {
-    console.log("Object deselected in 3D viewer:", deselection);
+// Handle selection events from different sources
+function handleSelectionEvent(selection: any, eventName: string): void {
+  console.log(`Handling selection event '${eventName}':`, selection);
+  
+  // Handle different selection data formats
+  let selectedObjects = [];
+  
+  if (Array.isArray(selection)) {
+    selectedObjects = selection;
+  } else if (selection && Array.isArray(selection.objects)) {
+    selectedObjects = selection.objects;
+  } else if (selection && selection.length !== undefined) {
+    selectedObjects = [selection];
+  } else if (selection) {
+    selectedObjects = [selection];
+  }
+  
+  if (selectedObjects.length > 0) {
+    // Get the first selected object
+    const selectedObject = selectedObjects[0];
+    console.log("Selected object details:", selectedObject);
     
-    // Send deselection message to Qlik extension
-    if (window.parent !== window) {
-      window.parent.postMessage({
-        type: "SPECKLE_OBJECT_DESELECTED",
-        source: "speckle-viewer"
-      }, "*");
+    // Extract IFC GUID from the selected object
+    const guid = extractGuidFromObject(selectedObject);
+    
+    if (guid) {
+      console.log("Extracted GUID from selected object:", guid);
+      
+      // Send selection message to Qlik extension
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: "SPECKLE_OBJECT_SELECTED",
+          source: "speckle-viewer",
+          guid: guid,
+          objectName: selectedObject.name || selectedObject.Name || "Unknown",
+          objectId: selectedObject.id
+        }, "*");
+      }
+    } else {
+      console.log("No GUID found in selected object");
     }
-  });
+  } else {
+    console.log("No objects in selection");
+  }
 }
 
 // Extract IFC GUID from a selected object
