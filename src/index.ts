@@ -447,31 +447,66 @@ function setupSelectionListener(selectionExtension: any): void {
 // Extract IFC GUID from a selected object
 function extractGuidFromObject(object: any): string | null {
   try {
-    // Try to get GUID from object properties
+    console.log("Extracting GUID from object:", object);
+    
+    // Try to get GUID from object properties (matching IFC extractor structure)
     if (object && object.model && object.model.raw) {
       const raw = object.model.raw;
+      console.log("Object raw data:", raw);
       
-      // Check for IFC GlobalId
-      if (raw.GlobalId) {
+      // Priority 1: IFC GlobalId (primary identifier)
+      if (raw.GlobalId && typeof raw.GlobalId === 'string' && raw.GlobalId.trim()) {
+        console.log("Found GlobalId:", raw.GlobalId);
         return raw.GlobalId;
       }
       
-      // Check for other GUID-like properties
-      if (raw.id && typeof raw.id === 'string' && raw.id.length > 10) {
-        return raw.id;
+      // Priority 2: IFC Tag (secondary identifier)
+      if (raw.Tag && typeof raw.Tag === 'string' && raw.Tag.trim()) {
+        console.log("Found Tag:", raw.Tag);
+        return raw.Tag;
       }
       
-      // Check for name-based identification
-      if (raw.Name && typeof raw.Name === 'string') {
+      // Priority 3: IFC Name (human-readable identifier)
+      if (raw.Name && typeof raw.Name === 'string' && raw.Name.trim()) {
+        console.log("Found Name:", raw.Name);
         return raw.Name;
+      }
+      
+      // Priority 4: ObjectType (IFC type classification)
+      if (raw.ObjectType && typeof raw.ObjectType === 'string' && raw.ObjectType.trim()) {
+        console.log("Found ObjectType:", raw.ObjectType);
+        return raw.ObjectType;
+      }
+      
+      // Priority 5: Speckle object ID (fallback)
+      if (raw.id && typeof raw.id === 'string' && raw.id.length > 10) {
+        console.log("Found Speckle ID:", raw.id);
+        return raw.id;
       }
     }
     
-    // Try to get GUID from object itself
-    if (object && object.id) {
-      return object.id;
+    // Try to get GUID from object itself (direct properties)
+    if (object) {
+      // Check direct GlobalId property
+      if (object.GlobalId && typeof object.GlobalId === 'string' && object.GlobalId.trim()) {
+        console.log("Found direct GlobalId:", object.GlobalId);
+        return object.GlobalId;
+      }
+      
+      // Check direct Name property
+      if (object.Name && typeof object.Name === 'string' && object.Name.trim()) {
+        console.log("Found direct Name:", object.Name);
+        return object.Name;
+      }
+      
+      // Check direct id property
+      if (object.id && typeof object.id === 'string' && object.id.trim()) {
+        console.log("Found direct ID:", object.id);
+        return object.id;
+      }
     }
     
+    console.log("No GUID found in object");
     return null;
   } catch (error) {
     console.error("Error extracting GUID from object:", error);
