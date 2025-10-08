@@ -114,6 +114,15 @@ async function loadModel(modelUrl: string): Promise<void> {
     }
     
     console.log("Model loaded successfully!");
+    
+    // Send success message back to Qlik extension
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: "SPECKLE_VIEWER_READY",
+        source: "speckle-viewer",
+        modelUrl: modelUrl
+      }, "*");
+    }
   } catch (error) {
     console.error("Failed to load model:", error);
     
@@ -126,6 +135,15 @@ async function loadModel(modelUrl: string): Promise<void> {
     }
     
     alert(`Failed to load model: ${(error as Error).message || String(error)}. Please check the URL and try again.`);
+    
+    // Send error message back to Qlik extension
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: "SPECKLE_VIEWER_ERROR",
+        source: "speckle-viewer",
+        error: (error as Error).message || String(error)
+      }, "*");
+    }
   }
 }
 
@@ -222,6 +240,16 @@ async function loadModelFromInput(): Promise<void> {
 
 // Make loadModelFromInput globally accessible
 (window as any).loadModelFromInput = loadModelFromInput;
+
+// Listen for messages from Qlik extension
+window.addEventListener("message", (event) => {
+  console.log("Received message:", event.data);
+  
+  if (event.data && event.data.type === "SPECKLE_URL_UPDATE" && event.data.modelUrl) {
+    console.log("Received URL update from Qlik extension:", event.data.modelUrl);
+    loadModel(event.data.modelUrl);
+  }
+});
 
 // Initialize the viewer when the page loads
 document.addEventListener("DOMContentLoaded", () => {
