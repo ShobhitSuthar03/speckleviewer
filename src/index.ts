@@ -9,6 +9,8 @@ import {
 
 // Global variables for viewer
 let viewer: Viewer | null = null;
+let allObjects: any[] = [];
+let filteredObjects: any[] = [];
 
 // Initialize the Speckle Viewer
 async function initViewer(): Promise<void> {
@@ -238,8 +240,153 @@ async function loadModelFromInput(): Promise<void> {
 }
 
 
-// Make loadModelFromInput globally accessible
+// Filter objects by IFC GUID
+function filterByGuid(guid: string): void {
+  if (!viewer) {
+    console.error("Viewer not initialized");
+    return;
+  }
+
+  try {
+    console.log(`Filtering objects by GUID: ${guid}`);
+    
+    // Get all objects from the world tree
+    const worldTree = viewer.getWorldTree();
+    if (!worldTree || !worldTree.root) {
+      console.error("World tree not available");
+      return;
+    }
+
+    // Collect all objects with their GUIDs
+    const objectsToShow: any[] = [];
+    const objectsToHide: any[] = [];
+
+    function traverseNode(node: any) {
+      if (node.model && node.model.raw) {
+        const raw = node.model.raw;
+        
+        // Check if this object has the target GUID
+        if (raw.GlobalId === guid || raw.id === guid) {
+          objectsToShow.push(node);
+          console.log(`Found matching object: ${raw.Name || raw.id}`);
+        } else {
+          objectsToHide.push(node);
+        }
+      }
+
+      // Recursively check children
+      if (node.children) {
+        node.children.forEach((child: any) => traverseNode(child));
+      }
+    }
+
+    // Start traversal from root
+    if (worldTree.root.children) {
+      worldTree.root.children.forEach((child: any) => traverseNode(child));
+    }
+
+    // Hide all objects first
+    objectsToHide.forEach(node => {
+      if (node.model) {
+        node.model.visible = false;
+      }
+    });
+
+    // Show only matching objects
+    objectsToShow.forEach(node => {
+      if (node.model) {
+        node.model.visible = true;
+      }
+    });
+
+    // Update the viewer
+    viewer.requestRender();
+
+    console.log(`Filtered: ${objectsToShow.length} objects shown, ${objectsToHide.length} objects hidden`);
+
+    // Send feedback to Qlik extension
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: "SPECKLE_FILTER_APPLIED",
+        source: "speckle-viewer",
+        guid: guid,
+        visibleCount: objectsToShow.length,
+        hiddenCount: objectsToHide.length
+      }, "*");
+    }
+
+  } catch (error) {
+    console.error("Error filtering by GUID:", error);
+    
+    // Send error message back to Qlik extension
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: "SPECKLE_VIEWER_ERROR",
+        source: "speckle-viewer",
+        error: `Filtering failed: ${(error as Error).message || String(error)}`
+      }, "*");
+    }
+  }
+}
+
+// Clear all filters and show all objects
+function clearFilter(): void {
+  if (!viewer) {
+    console.error("Viewer not initialized");
+    return;
+  }
+
+  try {
+    console.log("Clearing all filters");
+    
+    const worldTree = viewer.getWorldTree();
+    if (!worldTree || !worldTree.root) {
+      console.error("World tree not available");
+      return;
+    }
+
+    let visibleCount = 0;
+
+    function traverseNode(node: any) {
+      if (node.model) {
+        node.model.visible = true;
+        visibleCount++;
+      }
+
+      // Recursively process children
+      if (node.children) {
+        node.children.forEach((child: any) => traverseNode(child));
+      }
+    }
+
+    // Start traversal from root
+    if (worldTree.root.children) {
+      worldTree.root.children.forEach((child: any) => traverseNode(child));
+    }
+
+    // Update the viewer
+    viewer.requestRender();
+
+    console.log(`Filter cleared: ${visibleCount} objects now visible`);
+
+    // Send feedback to Qlik extension
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: "SPECKLE_FILTER_CLEARED",
+        source: "speckle-viewer",
+        visibleCount: visibleCount
+      }, "*");
+    }
+
+  } catch (error) {
+    console.error("Error clearing filter:", error);
+  }
+}
+
+// Make functions globally accessible
 (window as any).loadModelFromInput = loadModelFromInput;
+(window as any).filterByGuid = filterByGuid;
+(window as any).clearFilter = clearFilter;
 
 // Listen for messages from Qlik extension
 window.addEventListener("message", (event) => {
@@ -248,6 +395,16 @@ window.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SPECKLE_URL_UPDATE" && event.data.modelUrl) {
     console.log("Received URL update from Qlik extension:", event.data.modelUrl);
     loadModel(event.data.modelUrl);
+  }
+  
+  if (event.data && event.data.type === "SPECKLE_FILTER_BY_GUID" && event.data.guid) {
+    console.log("Received filter request for GUID:", event.data.guid);
+    filterByGuid(event.data.guid);
+  }
+  
+  if (event.data && event.data.type === "SPECKLE_CLEAR_FILTER") {
+    console.log("Received clear filter request");
+    clearFilter();
   }
 });
 
