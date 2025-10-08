@@ -96,7 +96,7 @@ async function loadModel(modelUrl: string): Promise<void> {
         const children = [...worldTree.root.children];
         children.forEach(child => {
           if (worldTree.removeNode) {
-            worldTree.removeNode(child);
+            worldTree.removeNode(child, true);
           }
         });
       }
@@ -130,7 +130,7 @@ async function loadModel(modelUrl: string): Promise<void> {
       loadingElement.style.color = "#e74c3c";
     }
     
-    alert(`Failed to load model: ${error.message || error}. Please check the URL and try again.`);
+    alert(`Failed to load model: ${(error as Error).message || String(error)}. Please check the URL and try again.`);
   }
 }
 
