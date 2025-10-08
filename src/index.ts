@@ -4,13 +4,13 @@ import {
   SpeckleLoader,
   UrlHelper,
   CameraController,
-  SelectionExtension
+  SelectionExtension,
+  FilteringExtension
 } from "@speckle/viewer";
 
 // Global variables for viewer
 let viewer: Viewer | null = null;
-let allObjects: any[] = [];
-let filteredObjects: any[] = [];
+let filteringExtension: FilteringExtension | null = null;
 
 // Initialize the Speckle Viewer
 async function initViewer(): Promise<void> {
@@ -35,6 +35,7 @@ async function initViewer(): Promise<void> {
     // Add extensions
     viewer.createExtension(CameraController);
     viewer.createExtension(SelectionExtension);
+    filteringExtension = viewer.createExtension(FilteringExtension);
 
     // Hide loading indicator
     if (loadingElement) {
@@ -240,26 +241,25 @@ async function loadModelFromInput(): Promise<void> {
 }
 
 
-// Filter objects by IFC GUID
+// Filter objects by IFC GUID using Speckle FilteringExtension
 function filterByGuid(guid: string): void {
-  if (!viewer) {
-    console.error("Viewer not initialized");
+  if (!viewer || !filteringExtension) {
+    console.error("Viewer or FilteringExtension not initialized");
     return;
   }
 
   try {
     console.log(`Filtering objects by GUID: ${guid}`);
     
-    // Get all objects from the world tree
+    // Get all objects from the world tree to find matching GUIDs
     const worldTree = viewer.getWorldTree();
     if (!worldTree || !worldTree.root) {
       console.error("World tree not available");
       return;
     }
 
-    // Collect all objects with their GUIDs
-    const objectsToShow: any[] = [];
-    const objectsToHide: any[] = [];
+    // Collect object IDs that match the GUID
+    const matchingObjectIds: string[] = [];
 
     function traverseNode(node: any) {
       if (node.model && node.model.raw) {
@@ -267,10 +267,8 @@ function filterByGuid(guid: string): void {
         
         // Check if this object has the target GUID
         if (raw.GlobalId === guid || raw.id === guid) {
-          objectsToShow.push(node);
-          console.log(`Found matching object: ${raw.Name || raw.id}`);
-        } else {
-          objectsToHide.push(node);
+          matchingObjectIds.push(node.model.id);
+          console.log(`Found matching object: ${raw.Name || raw.id} (ID: ${node.model.id})`);
         }
       }
 
@@ -285,34 +283,40 @@ function filterByGuid(guid: string): void {
       worldTree.root.children.forEach((child: any) => traverseNode(child));
     }
 
-    // Hide all objects first
-    objectsToHide.forEach(node => {
-      if (node.model) {
-        node.model.visible = false;
+    if (matchingObjectIds.length > 0) {
+      // Use Speckle's isolateObjects method to show only matching objects
+      const filteringState = filteringExtension.isolateObjects(
+        matchingObjectIds,
+        "guid-filter", // stateKey for this filter
+        true, // includeDescendants
+        true  // ghost other objects
+      );
+
+      console.log(`Filtered: ${matchingObjectIds.length} objects isolated using Speckle FilteringExtension`);
+      console.log("Filtering state:", filteringState);
+
+      // Send feedback to Qlik extension
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: "SPECKLE_FILTER_APPLIED",
+          source: "speckle-viewer",
+          guid: guid,
+          visibleCount: matchingObjectIds.length,
+          hiddenCount: filteringState.hiddenObjects?.length || 0,
+          filteringState: filteringState
+        }, "*");
       }
-    });
-
-    // Show only matching objects
-    objectsToShow.forEach(node => {
-      if (node.model) {
-        node.model.visible = true;
+    } else {
+      console.log(`No objects found with GUID: ${guid}`);
+      
+      // Send feedback to Qlik extension
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: "SPECKLE_VIEWER_ERROR",
+          source: "speckle-viewer",
+          error: `No objects found with GUID: ${guid}`
+        }, "*");
       }
-    });
-
-    // Update the viewer
-    viewer.requestRender();
-
-    console.log(`Filtered: ${objectsToShow.length} objects shown, ${objectsToHide.length} objects hidden`);
-
-    // Send feedback to Qlik extension
-    if (window.parent !== window) {
-      window.parent.postMessage({
-        type: "SPECKLE_FILTER_APPLIED",
-        source: "speckle-viewer",
-        guid: guid,
-        visibleCount: objectsToShow.length,
-        hiddenCount: objectsToHide.length
-      }, "*");
     }
 
   } catch (error) {
@@ -329,57 +333,42 @@ function filterByGuid(guid: string): void {
   }
 }
 
-// Clear all filters and show all objects
+// Clear all filters and show all objects using Speckle FilteringExtension
 function clearFilter(): void {
-  if (!viewer) {
-    console.error("Viewer not initialized");
+  if (!viewer || !filteringExtension) {
+    console.error("Viewer or FilteringExtension not initialized");
     return;
   }
 
   try {
-    console.log("Clearing all filters");
+    console.log("Clearing all filters using Speckle FilteringExtension");
     
-    const worldTree = viewer.getWorldTree();
-    if (!worldTree || !worldTree.root) {
-      console.error("World tree not available");
-      return;
-    }
+    // Use Speckle's resetFilters method to clear all filters
+    const filteringState = filteringExtension.resetFilters();
 
-    let visibleCount = 0;
-
-    function traverseNode(node: any) {
-      if (node.model) {
-        node.model.visible = true;
-        visibleCount++;
-      }
-
-      // Recursively process children
-      if (node.children) {
-        node.children.forEach((child: any) => traverseNode(child));
-      }
-    }
-
-    // Start traversal from root
-    if (worldTree.root.children) {
-      worldTree.root.children.forEach((child: any) => traverseNode(child));
-    }
-
-    // Update the viewer
-    viewer.requestRender();
-
-    console.log(`Filter cleared: ${visibleCount} objects now visible`);
+    console.log("All filters cleared using Speckle FilteringExtension");
+    console.log("Filtering state:", filteringState);
 
     // Send feedback to Qlik extension
     if (window.parent !== window) {
       window.parent.postMessage({
         type: "SPECKLE_FILTER_CLEARED",
         source: "speckle-viewer",
-        visibleCount: visibleCount
+        filteringState: filteringState
       }, "*");
     }
 
   } catch (error) {
     console.error("Error clearing filter:", error);
+    
+    // Send error message back to Qlik extension
+    if (window.parent !== window) {
+      window.parent.postMessage({
+        type: "SPECKLE_VIEWER_ERROR",
+        source: "speckle-viewer",
+        error: `Clear filter failed: ${(error as Error).message || String(error)}`
+      }, "*");
+    }
   }
 }
 
